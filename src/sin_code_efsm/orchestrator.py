@@ -1,11 +1,10 @@
-"""Orchestriert Mock-Server, DB und Sandbox für einen Agent-Task."""
+"""Orchestriert Mock-Server und Sandbox fuer einen Agent-Task."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
 
 from .mock_generator import MockServer, StatefulMock
-from .sandbox import DockerSandbox
+from .sandbox import DockerSandbox, docker_available
 
 
 @dataclass
@@ -14,33 +13,28 @@ class TestEnvironment:
     db_dsn: str | None
     container_id: str | None
     env_vars: dict[str, str] = field(default_factory=dict)
+    sandbox_backend: str = "docker"
 
 
 class EphemeralOrchestrator:
-    """Baut eine vollständige Testumgebung für einen Agent-Task."""
+    """Baut eine vollstaendige Testumgebung fuer einen Agent-Task."""
 
-    def __init__(self):
+    def __init__(self, mock_port: int = 8787):
         self.mock_server = MockServer()
         self.sandbox = DockerSandbox()
-        self._mock_port = 8787
+        self._mock_port = mock_port
 
     def configure_from_task(self, task_context: dict) -> TestEnvironment:
-        """
-        task_context: dict with keys:
-            - name: str
-            - external_apis: list[str]  # e.g., ["stripe", "github"]
-            - requires_db: bool
-            - test_command: str
-        """
-        env_vars = {}
+        """task_context keys: name, external_apis, requires_db, test_command."""
+        env_vars: dict[str, str] = {}
+        # Bei Docker erreicht der Container den Host ueber host.docker.internal,
+        # bei Subprozess-Fallback ueber localhost.
+        host = "host.docker.internal" if docker_available() else "127.0.0.1"
         for api in task_context.get("external_apis", []):
-            mock = StatefulMock(
-                name=api,
-                base_path=f"/{api}",
-                scenarios={},
+            self.mock_server.add_mock(StatefulMock(name=api, base_path=f"/{api}"))
+            env_vars[f"{api.upper()}_BASE_URL"] = (
+                f"http://{host}:{self._mock_port}/{api}"
             )
-            self.mock_server.add_mock(mock)
-            env_vars[f"{api.upper()}_BASE_URL"] = f"http://host.docker.internal:{self._mock_port}/{api}"
 
         db_dsn = None
         if task_context.get("requires_db"):
@@ -52,19 +46,32 @@ class EphemeralOrchestrator:
             db_dsn=db_dsn,
             container_id=None,
             env_vars=env_vars,
+            sandbox_backend="docker" if docker_available() else "subprocess",
         )
 
     def run_tests(self, test_command: str, with_network: bool = True) -> dict:
+        extra_hosts = (
+            {"host.docker.internal": "host-gateway"} if with_network else None
+        )
         try:
-            if with_network:
-                result = self.sandbox.run_with_network(test_command, timeout=120)
-            else:
-                result = self.sandbox.run_command(test_command, timeout=120)
+            result = self.sandbox.run_command(
+                test_command,
+                timeout=120,
+                network=with_network,
+                extra_hosts=extra_hosts,
+            )
             return {
                 "exit_code": result.exit_code,
                 "stdout": result.stdout[:2000],
                 "stderr": result.stderr[:2000],
                 "success": result.exit_code == 0,
+                "backend": result.backend,
             }
-        except Exception as e:
-            return {"exit_code": -1, "stdout": "", "stderr": str(e), "success": False}
+        except Exception as exc:
+            return {
+                "exit_code": -1,
+                "stdout": "",
+                "stderr": str(exc),
+                "success": False,
+                "backend": "none",
+            }

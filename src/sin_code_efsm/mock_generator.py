@@ -1,16 +1,14 @@
-"""Stateful Mock-Server für externe APIs."""
+"""Stateful Mock-Server fuer externe APIs."""
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
 
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-
 
 @dataclass
 class StatefulMock:
     """Mock mit echtem Zustand."""
+
     name: str
     base_path: str
     state: dict[str, Any] = field(default_factory=dict)
@@ -20,44 +18,84 @@ class StatefulMock:
         key = f"{method}:{path}"
         if key in self.scenarios:
             return self.scenarios[key]
-        # Default: echo with state update
+        resource = path.strip("/").split("/")[-1] or "root"
         if method == "POST":
-            resource = path.strip("/").split("/")[-1]
             self.state.setdefault(resource, []).append(body)
-            return {"status": "created", "id": len(self.state[resource]), "data": body}
-        elif method == "GET":
-            resource = path.strip("/").split("/")[-1]
+            return {
+                "status": "created",
+                "id": len(self.state[resource]),
+                "data": body,
+            }
+        if method == "GET":
             return {"data": self.state.get(resource, [])}
+        if method == "DELETE":
+            self.state.pop(resource, None)
+            return {"status": "deleted", "resource": resource}
+        if method in ("PUT", "PATCH"):
+            self.state[resource] = body
+            return {"status": "updated", "data": body}
         return {"status": "ok"}
 
 
 class MockServer:
-    """FastAPI-basierter Mock-Server mit mehreren Stateful-Mocks."""
+    """Mock-Server mit mehreren Stateful-Mocks.
 
-    def __init__(self):
-        self.app = FastAPI(title="SIN-Code Ephemeral Mock Server")
+    Der FastAPI-Layer ist optional: ist FastAPI nicht installiert, kann der
+    Server trotzdem in-process via ``dispatch`` getestet werden.
+    """
+
+    def __init__(self) -> None:
         self.mocks: dict[str, StatefulMock] = {}
-        self._register_routes()
+        self._app = None
 
-    def add_mock(self, mock: StatefulMock):
+    def add_mock(self, mock: StatefulMock) -> None:
         self.mocks[mock.base_path] = mock
 
-    def _register_routes(self):
-        @self.app.api_route("/{path:path}", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
-        async def catch_all(request: Request, path: str):
-            # Route to matching mock by prefix
-            for base, mock in self.mocks.items():
-                if path.startswith(base.lstrip("/")):
-                    body = None
-                    if request.method in ("POST", "PUT", "PATCH"):
-                        try:
-                            body = await request.json()
-                        except Exception:
-                            body = None
-                    result = mock.respond(request.method, f"/{path}", body)
-                    return JSONResponse(result)
-            return JSONResponse({"error": "no mock matched", "path": path}, status_code=404)
+    def dispatch(self, method: str, path: str, body: dict | None = None) -> dict:
+        """Routet eine Anfrage ohne HTTP-Layer (fuer Tests/in-process)."""
+        normalized = path if path.startswith("/") else f"/{path}"
+        for base, mock in self.mocks.items():
+            prefix = base if base.startswith("/") else f"/{base}"
+            if normalized.startswith(prefix):
+                return mock.respond(method, normalized, body)
+        return {"error": "no mock matched", "path": normalized}
 
-    def run(self, host: str = "127.0.0.1", port: int = 8787):
+    @property
+    def app(self):
+        if self._app is None:
+            self._app = self._build_app()
+        return self._app
+
+    def _build_app(self):
+        try:
+            from fastapi import FastAPI, Request
+            from fastapi.responses import JSONResponse
+        except ImportError as exc:  # pragma: no cover
+            raise RuntimeError(
+                "FastAPI is required to run the HTTP mock server. "
+                "Install with: pip install fastapi uvicorn"
+            ) from exc
+
+        app = FastAPI(title="SIN-Code Ephemeral Mock Server")
+
+        @app.api_route(
+            "/{path:path}",
+            methods=["GET", "POST", "PUT", "DELETE", "PATCH"],
+        )
+        async def catch_all(request: Request, path: str):  # noqa: ANN001
+            body = None
+            if request.method in ("POST", "PUT", "PATCH"):
+                try:
+                    body = await request.json()
+                except Exception:
+                    body = None
+            result = self.dispatch(request.method, f"/{path}", body)
+            status = 404 if result.get("error") == "no mock matched" else 200
+            return JSONResponse(result, status_code=status)
+
+        return app
+
+    def run(self, host: str = "127.0.0.1", port: int = 8787) -> None:  # pragma: no cover
         import uvicorn
+
         uvicorn.run(self.app, host=host, port=port)
