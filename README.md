@@ -1,39 +1,42 @@
 # SIN-Code Ephemeral Full-Stack Mocking Orchestration (EFSM)
 
-> Spin up a complete, isolated, ephemeral mock stack in under 2 seconds — HTTP,
-> database, auth, queue, and storage — all in-memory, no Docker, no real services.
+> Spin up a complete, isolated, ephemeral mock stack in under 2 seconds — HTTP, database, auth, queue, and storage — all in-memory, no Docker, no real services.
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green)](./LICENSE)
 
-Part of the [SIN-Code](https://github.com/OpenSIN-Code) agent-engineering stack.
-
-## Why
-
-Agents that touch external services (payments, third-party APIs, a database)
-either hit real systems (dangerous, flaky, costly) or rely on brittle, stateless
-stubs. EFSM builds a disposable full-stack environment: **stateful** mocks that
-remember what you POSTed, wired into a single HTTP gateway, so tests exercise
-realistic behavior and then vanish completely.
+Part of the [SIN-Code](https://github.com/OpenSIN-Code) agent-engineering stack. Install all subsystems together via the [SIN-Code Bundle](https://github.com/OpenSIN-Code/SIN-Code-Bundle).
 
 ## Features
 
-- **EphemeralMockServer** — one class starts all five services on a single port.
-- **HTTP service** — mock arbitrary REST endpoints with per-method registration.
-- **Database service** — in-memory SQLite with schema setup/teardown.
-- **Auth service** — mock OAuth2 / JWT issuance and validation (HS256, no deps).
-- **Queue service** — in-memory pub/sub per topic.
-- **Storage service** — dict-based S3-like object store.
-- **True ephemeral** — all data wiped on `stop()`, no external dependencies.
-- **Fast startup** — < 2 seconds, no Docker required.
-- **Random port allocation** — falls back automatically if preferred port is taken.
-- **Graceful shutdown** — SIGINT / SIGTERM handlers included.
+- **EphemeralMockServer** — one class starts all five services on a single port
+- **HTTP service** — mock arbitrary REST endpoints with per-method registration
+- **Database service** — in-memory SQLite with schema setup/teardown
+- **Auth service** — mock OAuth2 / JWT issuance and validation (HS256, no deps)
+- **Queue service** — in-memory pub/sub per topic
+- **Storage service** — dict-based S3-like object store
+- **True ephemeral** — all data wiped on `stop()`, no external dependencies
+- **Fast startup** — < 2 seconds, no Docker required
+- **Random port allocation** — falls back automatically if preferred port is taken
+- **Graceful shutdown** — SIGINT / SIGTERM handlers included
+- **MCP server** — orchestrate mocks from AI agents via the Model Context Protocol
 
-## Quickstart
+## Installation
 
 ```bash
 pip install -e .
 ```
+
+Optional MCP server support:
+```bash
+pip install -e ".[mcp]"
+```
+
+See [INSTALL.md](./INSTALL.md) for detailed setup instructions.
+
+## Usage
+
+### Library
 
 ```python
 from sin_code_efsm import EphemeralMockServer
@@ -51,7 +54,7 @@ print(r.json())  # {"msg": "world"}
 server.stop()  # everything vanishes
 ```
 
-## Services
+### Services
 
 | Service | Prefix | What it does |
 |---------|--------|--------------|
@@ -61,16 +64,41 @@ server.stop()  # everything vanishes
 | Queue | `/queue` | Pub/sub per topic |
 | Storage | `/storage` | S3-like object store |
 
-## API
+### CLI
 
-```python
-server = EphemeralMockServer(port=8888, services=["http", "auth"])
-server.start()
-server.add_endpoint("POST", "/webhook", {"ok": True})
-server.status        # {service: {status: 'up', port: 8888, ...}}
-server.reset()       # wipe in-memory state without stopping
-server.stop()        # tear everything down
+```bash
+# Spin up ephemeral environment and run tests
+efsm setup my-test --api https://api.example.com --db --test-cmd pytest
+
+# Serve mock server in background
+efsm setup my-test --api https://api.example.com --serve-mock
 ```
+
+## Testing
+
+```bash
+pytest tests/ -v
+```
+
+## MCP Server
+
+Run the MCP server for agent integration:
+
+```bash
+python -m sin_code_efsm.mcp_server
+```
+
+Tools exposed:
+- `generate_mock(service_spec, format="json")` — generate a mock service from an OpenAPI or GraphQL spec
+- `orchestrate_mock(services, scenario="default")` — orchestrate ephemeral mock services for integration testing
+
+## Integration
+
+EFSM is designed to work as part of the SIN-Code ecosystem:
+
+- **SIN-Code Bundle** — orchestrates all subsystems from a single CLI (`sin`)
+- **Orchestration** — spin up mock stacks as part of CI/agent workflows
+- **Verification Oracle** — run integration tests against ephemeral mocks
 
 ## Documentation
 
@@ -83,9 +111,7 @@ server.stop()        # tear everything down
 
 ## Note on isolation
 
-Docker gives the strongest isolation. When Docker is not present, EFSM falls back
-to a resource-limited subprocess runner — convenient for local/CI use, but not a
-security boundary for untrusted code.
+Docker gives the strongest isolation. When Docker is not present, EFSM falls back to a resource-limited subprocess runner — convenient for local/CI use, but not a security boundary for untrusted code.
 
 ## License
 

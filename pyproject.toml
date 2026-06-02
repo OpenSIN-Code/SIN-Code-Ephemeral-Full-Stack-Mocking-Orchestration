@@ -16,12 +16,16 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+mcp = ["mcp[cli]>=1.2"]
 dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "httpx>=0.24",
     "respx>=0.20",
 ]
+
+[project.scripts]
+efsm = "sin_code_efsm.cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]
