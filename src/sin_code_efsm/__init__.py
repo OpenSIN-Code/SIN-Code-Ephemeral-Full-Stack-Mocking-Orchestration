@@ -4,6 +4,7 @@ __version__ = "0.1.0"
 from .mock_generator import MockServer, StatefulMock
 from .sandbox import DockerSandbox, SandboxResult, docker_available
 from .orchestrator import EphemeralOrchestrator, TestEnvironment
+from .server import EphemeralMockServer
 
 __all__ = [
     "MockServer",
@@ -13,4 +14,5 @@ __all__ = [
     "docker_available",
     "EphemeralOrchestrator",
     "TestEnvironment",
+    "EphemeralMockServer",
 ]

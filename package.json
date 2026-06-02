@@ -1,0 +1,21 @@
+{
+  "name": "sin-code-efsm",
+  "version": "0.1.0",
+  "description": "Ephemeral Full-Stack Mock Orchestration",
+  "author": "SIN-Code",
+  "requires-python": ">=3.10",
+  "dependencies": [
+    "fastapi>=0.100",
+    "uvicorn[standard]>=0.23",
+    "pydantic>=2.0",
+    "flask>=3.0",
+    "pyjwt[crypto]>=2.8",
+    "passlib[bcrypt]>=1.7",
+    "httpx>=0.24",
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21"
+  ],
+  "scripts": {
+    "sin-efsm": "sin_code_efsm.cli:main"
+  }
+}
