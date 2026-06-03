@@ -1,4 +1,7 @@
-"""Mock services package."""
+"""Mock services package.
+
+Docs: services/__init__.py.doc.md
+"""
 from .auth import AuthService
 from .base import BaseService
 from .database import DatabaseService

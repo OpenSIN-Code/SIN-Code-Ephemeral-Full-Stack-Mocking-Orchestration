@@ -1,4 +1,7 @@
-"""SIN-Code Ephemeral Full-Stack Mocking Orchestration."""
+"""SIN-Code Ephemeral Full-Stack Mocking Orchestration.
+
+Docs: __init__.py.doc.md
+"""
 __version__ = "0.1.0"
 
 from .mock_generator import MockServer, StatefulMock

@@ -1,38 +1,54 @@
-# http.py.doc.md
+# services/http.py
 
-**What this file does:** `HTTPService` mocks arbitrary REST endpoints under the
-`/http` prefix on the shared FastAPI gateway.
+HTTP endpoint mocking service.
+
+## What it does
+
+Lets you register arbitrary REST endpoints that the shared gateway
+serves under `/http/*`. Unregistered paths return 404 with
+`{"error": "endpoint not registered", "path": "..."}` so callers
+can distinguish "I forgot to register this" from a real outage.
+
+Every request is recorded in a call log (`calls()`) so tests can
+assert on what was hit, with what body, in what order.
 
 ## Dependencies
 
-- `fastapi.Request`, `JSONResponse` — imported at module level so FastAPI
-  correctly resolves the `Request` type annotation for dependency injection.
-  (Local imports inside `register_routes` caused 422 errors because FastAPI
-  treated `request` as a query parameter.)
+- `threading` (stdlib) for the call-log lock
+- `fastapi`
+- `state.py` — `StateStore` (endpoint registry)
 
-## Important config values
+## Public API
 
-- `_VALID_METHODS` = `GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS`
-- `prefix = "/http"` — all mock endpoints are served under this path.
+| Symbol | Purpose |
+|--------|---------|
+| `HTTPService` | The service class (`name="http"`, `prefix="/http"`) |
+| `add_endpoint(method, path, response, status_code=200)` | Register a mock |
+| `get_endpoint(method, path)` | Return registered config or `None` |
+| `remove_endpoint(method, path)` | Remove a registration |
+| `endpoints()` | List all `(method, path)` tuples |
+| `calls()` / `clear_calls()` | Access / clear the request log |
 
-## Key design decisions
+## Valid HTTP methods
 
-- **Thread-safe endpoint store** — `StateStore` (from `state.py`) wraps a `dict`
-  with a `threading.Lock` so multiple concurrent requests can register and hit
-  endpoints safely.
-- **Call log** — every request is recorded in `self._call_log` so tests can
-  assert on side-effects (e.g. "was the webhook called?").
-- **404 for unregistered paths** — distinguishes "forgot to register" from real
-  outages.
+`_VALID_METHODS` is the closed set: `GET`, `POST`, `PUT`, `PATCH`,
+`DELETE`, `HEAD`, `OPTIONS`. Anything else raises `ValueError`.
 
-## Usage examples
+## Usage
 
 ```python
+from sin_code_efsm.services.http import HTTPService
 http = HTTPService()
 http.add_endpoint("GET", "/users/1", {"id": 1, "name": "Ada"})
+print(http.calls())  # recorded requests so far
 ```
 
 ## Known caveats
 
-- The `path:path` route parameter in FastAPI captures everything including
-  slashes, so `/http/a/b/c` works as expected.
+- Endpoint keys are normalized to `METHOD::/path` (uppercase
+  method, leading-slash path). Registering the same key twice
+  overwrites the first registration — there is no warning.
+- The call log is unbounded. For long-running tests, call
+  `clear_calls()` between phases or risk memory growth.
+- `register_routes` uses a catch-all `/{path:path}` so non-mock
+  paths under `/http/...` are 404, not 405.
