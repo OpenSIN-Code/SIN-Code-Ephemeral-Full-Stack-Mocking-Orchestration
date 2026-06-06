@@ -1,0 +1,19 @@
+services:
+  - name: user-api
+    type: http
+    port: 18080
+    routes:
+      - path: /users
+        method: GET
+        response: '{"users": [{"id": 1, "name": "Alice"}]}'
+      - path: /users
+        method: POST
+        response: '{"id": 2, "name": "Bob"}'
+        status: 201
+  - name: test-db
+    type: sqlite
+    schema: |
+      CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT);
+    seed:
+      - INSERT INTO users (id, name) VALUES (1, 'Alice');
+      - INSERT INTO users (id, name) VALUES (2, 'Bob');

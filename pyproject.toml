@@ -3,16 +3,17 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "sin-code-efsm"
+name = "efm"
 version = "0.1.0"
-description = "Ephemeral Full-Stack Mock Orchestration — in-memory HTTP, DB, Auth, Queue, Storage"
+description = "Ephemeral Full-Stack Mocking — quickly spin up mock HTTP APIs and SQLite databases for testing."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 dependencies = [
     "fastapi>=0.100",
     "uvicorn[standard]>=0.23",
-    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "typer>=0.9",
 ]
 
 [project.optional-dependencies]
@@ -21,11 +22,10 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.21",
     "httpx>=0.24",
-    "respx>=0.20",
 ]
 
 [project.scripts]
-efsm = "sin_code_efsm.cli:app"
+efm = "efm.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
